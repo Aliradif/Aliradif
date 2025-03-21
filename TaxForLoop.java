@@ -2,19 +2,25 @@ import java.util.*;
 public class TaxForLoop {
     public static void main(String[] args){
         Scanner sc = new Scanner(System.in);
-        int count = 0;
+        int count = 0; Double income = 0.0; char status = ' ';
         for (; count < 3; count++) 
         {
+            
             System.out.print("Enter your Name: ");
             String Name = sc.nextLine();
            
-           
+          while (true) {
+            
+           try{      
             System.out.print("Enter your income: ");
-            Double income = sc.nextDouble();
-           
-           
+            income = sc.nextDouble();
+            break;}
+            catch(Exception e){
+                System.out.println("Invalid input. please enter a number, you entered a " + sc.nextLine());
+                            }      
+        }
             System.out.print("Enter your Status, (M) for Married and (S) for Single: ");
-            char status = sc.next().charAt(0);
+            status = sc.next().charAt(0);
             
             for (;!(status == 'M' || status == 'm' || status == 'S' || status == 's');){
                 System.out.println("Invalid Status. Please enter 'M' for Married or 'S' for Single.");
@@ -51,7 +57,7 @@ public class TaxForLoop {
         }
         sc.close();  
     }
-    
+
                        
                     
     
