@@ -1,0 +1,197 @@
+player_state := class:
+
+var TimeRemaining : float = 180.0
+
+var Kills : int = 0
+
+var Deaths : int = 0
+
+var HasPistol : logic = false
+
+ffa_controller := class(creative_device):
+
+@editable PlayerSpawners : []player_spawner_device = array{}
+
+@editable CreatureSpawners : []creature_spawner_device = array{}
+
+@editable PreGameVideos : []cinematic_sequence_device = array{}
+
+@editable PreGameSounds : []audio_player_device = array{}
+
+@editable CustomLights : []CustomLight = array{}
+
+@editable InputTrigger : input_trigger_device = input_trigger_device{}
+
+@editable PistolGranter : item_granter_device = item_granter_device{}
+
+@editable BatGranter : item_granter_device = item_granter_device{}
+
+@editable EndGameDevice : end_game_device = end_game_device{}
+
+@editable InitialPlayerTime : float = 180.0 # 3 minutes
+
+var PlayerStates : [agent]player_state = map{}
+
+OnBegin():void =
+
+PlayPreGameMediaAndWait()
+
+for (Player : GetPlayspace().GetPlayers()):
+
+InitPlayer(Player)
+
+AssignFlashlight(Player)
+
+GetPlayspace().PlayerAddedEvent().Subscribe(OnPlayerAdded)
+
+spawn { CreatureWaveLoop() }
+
+Sleep(300.0)
+
+EndGameDevice.Activate(Self)
+
+PlayPreGameMediaAndWait() : void =
+
+var Played := false
+
+if (PreGameVideos.Length > 0):
+
+VideoIdx := GetRandomInt(0, PreGameVideos.Length - 1)
+
+if (Video := PreGameVideos[VideoIdx]):
+
+Video.Play()
+
+set Played = true
+
+if (PreGameSounds.Length > 0):
+
+SoundIdx := GetRandomInt(0, PreGameSounds.Length - 1)
+
+if (Sound := PreGameSounds[SoundIdx]):
+
+Sound.Play()
+
+set Played = true
+
+if (Played?):
+
+Sleep(30.0)
+
+InitPlayer(Player : player) : void =
+
+if (Agent := agent[Player]):
+
+set PlayerStates[Agent] = player_state{TimeRemaining := InitialPlayerTime}
+
+if (FC := Player.GetFortCharacter[]):
+
+FC.EliminatedEvent().Subscribe(OnPlayerEliminated)
+
+BatGranter.GrantItem(Player)
+
+OnPlayerAdded(Player : player) : void =
+
+InitPlayer(Player)
+
+AssignFlashlight(Player)
+
+# --- Flashlight ---
+
+AssignFlashlight(Player:player):void =
+
+if (Agent := agent[Player]): TrackPlayerFlashlight(Agent)
+
+TrackPlayerFlashlight(Agent:agent):void =
+
+spawn { TrackPlayerFlashlightTask(Agent) }
+
+GetAvailableLight() : CustomLight =
+
+var NewLight : CustomLight = CustomLight{}
+
+var IsFound : logic = false
+
+for (L : CustomLights, not IsFound?):
+
+if (L.IsAvailable?):
+
+set NewLight = L
+
+set IsFound = true
+
+set L.IsAvailable = false
+
+return NewLight
+
+TrackPlayerFlashlightTask(Agent:agent):void =
+
+NewLight := GetAvailableLight()
+
+var IsOff : logic = true
+
+if (FC := Agent.GetFortCharacter[]):
+
+race:
+
+block:
+
+loop:
+
+PlayerLeft := GetPlayspace().PlayerRemovedEvent().Await()
+
+if (PlayerLeft = Agent):
+
+set NewLight.IsAvailable = true
+
+NewLight.LightDevice.TurnOff()
+
+break
+
+block:
+
+loop:
+
+Toggler := InputTrigger.PressedEvent.Await()
+
+if (Toggler = Agent):
+
+if (IsOff?):
+
+NewLight.LightDevice.TurnOn()
+
+set IsOff = false
+
+else:
+
+NewLight.LightDevice.TurnOff()
+
+set IsOff = true
+
+loop:
+
+Sleep(0.0)
+
+PlayerPos := FC.GetTransform().Translation
+
+PlayerRot := FC.GetViewRotation()
+
+PlayerForward := PlayerRot.GetLocalForward() * 100.0
+
+SpawnPos := PlayerPos + PlayerForward
+
+if (NewLight.LightDevice.TeleportTo[SpawnPos + vector3{Z := 30.0}, PlayerRot]) {}
+
+# --- Elimination and Reward Logic ---
+
+OnPlayerEliminated(Result:elimination_result):void =
+
+if (EliminatedCharacter := Result.EliminatedCharacter,
+
+EliminatedAgent := EliminatedCharacter.GetAgent[]):
+
+if (State := PlayerStates[EliminatedAgent]):
+
+set State.Deaths += 1
+
+if (State.Deaths >= 5 and State.Kills = 0):
